@@ -1,0 +1,70 @@
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load image
+img = cv2.imread('data/coins.png')  # Ensure the file exists
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+# Thresholding
+_, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+# Find contours
+contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+output_img = img.copy()
+
+for cnt in contours:
+    # Bounding box properties
+    x, y, w, h = cv2.boundingRect(cnt)
+    aspect_ratio = w / float(h)
+
+    # Compute properties
+    area = cv2.contourArea(cnt)
+    perimeter = cv2.arcLength(cnt, True)
+    circularity = 4 * np.pi * (area / (perimeter ** 2)) if perimeter != 0 else 0
+
+    # Convex Hull
+    hull = cv2.convexHull(cnt)
+    hull_area = cv2.contourArea(hull)
+    solidity = area / float(hull_area) if hull_area != 0 else 0
+
+    # Min Enclosing Circle
+    (circle_x, circle_y), radius = cv2.minEnclosingCircle(cnt)
+    center = (int(circle_x), int(circle_y))
+    radius = int(radius)
+
+    # Moments for Centroid
+    M = cv2.moments(cnt)
+    if M["m00"] != 0:
+        cx = int(M["m10"] / M["m00"])
+        cy = int(M["m01"] / M["m00"])
+        cv2.circle(output_img, (cx, cy), 5, (0, 255, 255), -1)  # Yellow centroid
+
+    # Classify Objects
+    object_type = "Unknown"
+
+    if 0.85 < circularity < 1.15 and aspect_ratio > 0.9:
+        object_type = "Coin"
+        color = (0, 255, 0)  # Green
+    elif solidity < 0.8:
+        object_type = "Irregular Shape"
+        color = (255, 0, 255)  # Magenta
+    else:
+        object_type = "Other"
+        color = (255, 255, 0)  # Cyan
+
+    # Draw bounding box and label
+    cv2.rectangle(output_img, (x, y), (x + w, y + h), color, 2)
+    cv2.putText(output_img, object_type, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+# Display results
+fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+axs[0].imshow(cv2.cvtColor(thresh, cv2.COLOR_BGR2RGB))
+axs[0].set_title("Thresholded Image")
+axs[0].axis("off")
+
+axs[1].imshow(cv2.cvtColor(output_img, cv2.COLOR_BGR2RGB))
+axs[1].set_title("Object Classification")
+axs[1].axis("off")
+
+plt.show()
